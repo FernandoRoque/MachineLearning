@@ -1,0 +1,152 @@
+---
+title: "How much activity?"
+author: "Fernando Roque"
+date: "13 de agosto de 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+##Data
+
+The training data for this project are available here: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The test data are available here: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har]. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Exploratory Analisys
+
+The first step is load the data prevuiuosly downloaded from the web and explore the data.
+
+```{r}
+setwd("C:/Users/Fernando/Documents/Material/Coursera/DataScience/Pracrical machine")
+
+# Loading data
+train_data <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+rtest_data  <- read.csv("pml-testing.csv",  na.strings=c("NA","#DIV/0!",""))
+
+```
+
+```{r}
+dim(train_data)
+dim(rtest_data)
+```
+
+If we explore the data, we will see that there is a lot of NA's. We can observe that variables with a lot of NA's correspond to summary statistics such as kurtosis, max, skewness, etc. new_Window variable help us in determining if the record correspon to a summary statistics, i.e., `yes` value indicates a summary statistics record. The following table summarize how much of this record exists:
+```{r}
+table(train_data$new_window)
+```
+Above table indicates that there is 406 records taht we can deleted from the analysis. The following code delete this observations.
+```{r}
+trainc <- train_data[train_data$new_window!="yes",]
+```
+If we drop this records, summary statistics variables will have only NA's. To eliminate this variables, we will use grep function to reference variable with an especific character inicial name. 
+
+```{r}
+ncol <- data.frame(ncol=names(trainc))
+kur <- with(ncol, grep("kurtosis",ncol))
+max <- with(ncol, grep("max",ncol))
+min <- with(ncol, grep("min",ncol))
+ske <- with(ncol, grep("skewness",ncol))
+amp <- with(ncol, grep("amplitude",ncol))
+var <- with(ncol, grep("var",ncol))
+avg <- with(ncol, grep("avg",ncol))
+std <- with(ncol, grep("stddev",ncol))
+oth <- c(1:7) # Other general useless variables
+nvar<-c(oth, kur, max, min, ske, amp, var, avg, std)
+traincv <- trainc[,-nvar]
+testcv <- rtest_data[,-nvar]
+```
+
+The following are the variables we will omit in the analisys. The resulting is storage in `traincv`
+
+```{r}
+ncol[nvar,]
+```
+
+The following graph shows the distribution of the response variable.
+
+```{r}
+plot(traincv$classe)
+```
+
+
+## Data Partition 
+
+Train `traincv` variable contain only 53 variables including the objective variable. We limit our exploratory analisys to dimentionality reduction. The next step is data partition. Wi will partition the data in 70-30 proportion. 
+
+```{r, message=FALSE}
+library(caret)
+set.seed(123)
+
+inTrain <- createDataPartition(y=traincv$classe, p=0.7, list=FALSE)
+
+train <- traincv[inTrain, ]
+test  <- traincv[-inTrain,]
+```
+
+
+## Regression Tree Model
+
+
+The model consists in a decission tree using `rpart`  function that considers `classe` as dependent variable.
+```{r}
+library(rpart)
+library(rpart.plot)
+library(rattle)
+fit1 <- rpart(classe ~ ., data=train, method="class")
+```
+
+A first view of the tree.
+```{r}
+plot(fit1)
+text(fit1)
+```
+
+A better view.
+```{r}
+prp(fit1,varlen=5)
+```
+
+There is another view using `rattle` package.
+
+```{r}
+fancyRpartPlot(fit1)
+```
+
+Using this model, we obtain the prediction of the 30% of the observations and build a confussion matrix
+
+```{r}
+prediction <- predict(fit1, test, type="class")
+confusionMatrix(prediction, test$classe)
+```
+
+## Random forest Model
+
+
+We build a second model.
+```{r, message=FALSE}
+library(randomForest)
+fit2 <- randomForest(train$classe ~ .,   data=train, do.trace=F)
+print(fit2)
+```
+
+Acording with results, this model is much more better than the decission tree, with only an error rate of o.43%.
+
+## Prediction
+Finally, beacuse of the low error rate, we choose random forest model and predict new observations.
+  
+```{r}
+new_observations_predict <- predict(fit2, testcv, type="class")
+new_observations_predict
+```
+
+
+This example sohows the adventage in predictions of the random forest tree versus a simgle decission tree, but an the cost of high resources.
